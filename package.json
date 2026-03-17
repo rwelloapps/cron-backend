@@ -1,0 +1,16 @@
+{
+  "name": "bizbuzz_cron_service",
+  "version": "1.0.0",
+  "description": "Cron jobs for mandate checks, subscription hold, and billing cycle payments",
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node index.js",
+    "test": "node index.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.0.0",
+    "mongoose": "^6.2.10",
+    "node-cron": "^3.0.3"
+  }
+}
