@@ -1,6 +1,7 @@
 const path = require('path');
 const mongoose = require('../services/mongo_db');
 const booking = require(path.join(__dirname, '..', '..', 'admin', 'models', 'booking'));
+const userModel = require(path.join(__dirname, '..', '..', 'admin', 'models', 'user'));
 const slotBlock = require(path.join(__dirname, '..', '..', 'admin', 'models', 'slot_block'));
 const userCancellationRecord = require(path.join(__dirname, '..', '..', 'admin', 'models', 'user_cancellation_record'));
 const branch = require(path.join(__dirname, '..', '..', 'admin', 'models', 'branch'));
@@ -48,6 +49,11 @@ async function checkPrepaidPayments() {
       try {
         const doc = await booking.findById(b._id).session(session);
         if (!doc || doc.payment_received) {
+          await session.abortTransaction();
+          continue;
+        }
+        const endUser = await userModel.findById(doc.user_id).select('is_blocked').session(session).lean();
+        if (endUser?.is_blocked) {
           await session.abortTransaction();
           continue;
         }
