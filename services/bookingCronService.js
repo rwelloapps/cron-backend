@@ -12,6 +12,7 @@ const cancellationPolicy = require(path.join(__dirname, '..', '..', 'admin', 'mo
 const razorpaySdk = require(path.join(__dirname, '..', '..', 'admin', 'services', 'razorpay_sdk'));
 const { getRefundPercentage } = require(path.join(__dirname, '..', '..', 'admin', 'routes', 'v1', 'middlewares', 'cancellation_policy'));
 const bookingServiceAdmin = require(path.join(__dirname, '..', '..', 'admin', 'services', 'bookingService'));
+const { roundMoney, totalCustomerPaysFromBooking } = bookingServiceAdmin;
 const {
   NO_SHOW_GRACE_MINUTES,
   ORDER_STATUS,
@@ -61,7 +62,13 @@ async function checkPrepaidPayments() {
         doc.payment_received_at = new Date();
         doc.razorpay_payment_id = captured.id;
         doc.razorpay_amount_paise = captured.amount;
-        if (captured.fee != null) doc.razorpay_commission_amount = (captured.fee || 0) / 100;
+        const pgPct = doc.pg_commission_percentage || 0;
+        if (pgPct > 0) {
+          const totalIn = totalCustomerPaysFromBooking(doc);
+          doc.razorpay_commission_amount = roundMoney((totalIn * pgPct) / 100);
+        } else if (captured.fee != null) {
+          doc.razorpay_commission_amount = (captured.fee || 0) / 100;
+        }
         if (captured.method) doc.razorpay_payment_method = captured.method;
         doc.status = ORDER_STATUS.CONFIRMED;
         await doc.save({ session });
