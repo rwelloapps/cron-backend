@@ -1,5 +1,5 @@
 /**
- * Re-verify mandate status with Razorpay and refresh vendor/branch is_subscription_active.
+ * Re-verify mandate status with Easebuzz and refresh vendor/branch is_subscription_active.
  * Runs frequently (e.g. hourly) so that if a check fails during the day, status is updated
  * without waiting for the next day's billing/hold jobs.
  */

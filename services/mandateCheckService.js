@@ -1,30 +1,36 @@
 const path = require('path');
 const paymentMandate = require('../../admin/models/payment_mandate');
-const razorpaySdk = require(path.join(__dirname, '..', '..', 'admin', 'services', 'razorpay_sdk'));
+const vendor = require('../../admin/models/vendor');
+const easebuzzSdk = require(path.join(__dirname, '..', '..', 'admin', 'services', 'easebuzz_sdk'));
 
-function mapTokenStatus(razorpayData) {
-  var status = (razorpayData && razorpayData.status) ? String(razorpayData.status).toLowerCase() : '';
-  if (status === 'confirmed' || status === 'active') return 'confirmed';
-  if (status === 'rejected' || status === 'cancelled') return 'rejected';
-  if (status === 'expired') return 'expired';
-  if (status === 'revoked') return 'revoked';
-  if (status === 'paused') return 'paused';
+function mapPaymentStatus(payData) {
+  if (!payData) return 'pending';
+  var st = String(payData.status || '').toLowerCase();
+  if (st === 'captured' || st === 'success' || st === 'authorized') return 'confirmed';
   return 'pending';
 }
 
 async function checkMandate(mandate) {
-  var tokenId = mandate.razorpay_token_id;
-  if (!tokenId) {
-    return { updated: false, status: mandate.mandate_status, error: 'No token_id' };
+  if (!mandate.razorpay_payment_id || !mandate.razorpay_order_id) {
+    return { updated: false, status: mandate.mandate_status, error: 'Missing easepayid/txnid on mandate for Easebuzz verification' };
   }
 
-  var result = await razorpaySdk.fetchToken(tokenId);
+  var vdoc = await vendor.findById(mandate.vendor_id).lean();
+  var result = await easebuzzSdk.fetchPayment(mandate.razorpay_payment_id, {
+    razorpay_order_id: mandate.razorpay_order_id,
+    pg_pay_email: vdoc && vdoc.email,
+    pg_pay_phone: (vdoc && (vdoc.phone || vdoc.temp_phone)) || undefined,
+    razorpay_amount_paise: mandate.mandate_amount != null
+      ? Math.max(100, Math.round(Number(mandate.mandate_amount) * 100))
+      : 100
+  });
+
   if (!result.success) {
     await paymentMandate.updateOne(
       { _id: mandate._id },
       {
         $set: {
-          last_error: result.error || 'Token fetch failed',
+          last_error: result.error || 'Payment retrieve failed',
           last_error_date: new Date(),
           last_verification_date: new Date()
         },
@@ -34,7 +40,7 @@ async function checkMandate(mandate) {
     return { updated: false, status: mandate.mandate_status, error: result.error };
   }
 
-  var newStatus = mapTokenStatus(result.data);
+  var newStatus = mapPaymentStatus(result.data);
   await paymentMandate.updateOne(
     { _id: mandate._id },
     {
@@ -73,5 +79,5 @@ async function checkAllMandates() {
 module.exports = {
   checkMandate: checkMandate,
   checkAllMandates: checkAllMandates,
-  mapTokenStatus: mapTokenStatus
+  mapPaymentStatus: mapPaymentStatus
 };

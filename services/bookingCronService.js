@@ -9,7 +9,7 @@ const vendor = require(path.join(__dirname, '..', '..', 'admin', 'models', 'vend
 const vendorService = require(path.join(__dirname, '..', '..', 'admin', 'models', 'vendor_service'));
 const premiumPlan = require(path.join(__dirname, '..', '..', 'admin', 'models', 'premium_plan'));
 const cancellationPolicy = require(path.join(__dirname, '..', '..', 'admin', 'models', 'cancellation_policy'));
-const razorpaySdk = require(path.join(__dirname, '..', '..', 'admin', 'services', 'razorpay_sdk'));
+const easebuzzSdk = require(path.join(__dirname, '..', '..', 'admin', 'services', 'easebuzz_sdk'));
 const { getRefundPercentage } = require(path.join(__dirname, '..', '..', 'admin', 'routes', 'v1', 'middlewares', 'cancellation_policy'));
 const bookingServiceAdmin = require(path.join(__dirname, '..', '..', 'admin', 'services', 'bookingService'));
 const { roundMoney, totalCustomerPaysFromBooking } = bookingServiceAdmin;
@@ -27,7 +27,7 @@ async function ensureDb() {
 }
 
 /**
- * Check prepaid pending bookings for Razorpay payments and confirm
+ * Check prepaid pending bookings for Easebuzz payments and confirm
  */
 async function checkPrepaidPayments() {
   await ensureDb();
@@ -40,10 +40,11 @@ async function checkPrepaidPayments() {
   let confirmed = 0;
   for (const b of pending) {
     try {
-      const payResult = await razorpaySdk.fetchPaymentsByOrderId(b.razorpay_order_id);
-      if (!payResult.success || !payResult.data?.items?.length) continue;
-      const captured = payResult.data.items.find(p => p.status === 'captured');
-      if (!captured) continue;
+      const payResult = await easebuzzSdk.fetchPaymentsByOrderId(b.razorpay_order_id, b);
+      if (!payResult.success || !payResult.data) continue;
+      const st = payResult.data.status;
+      if (st !== 'captured' && st !== 'success') continue;
+      const captured = payResult.data;
 
       const session = await mongoose.startSession();
       session.startTransaction();
@@ -60,7 +61,7 @@ async function checkPrepaidPayments() {
         }
         doc.payment_received = true;
         doc.payment_received_at = new Date();
-        doc.razorpay_payment_id = captured.id;
+        doc.razorpay_payment_id = captured.easepayid || captured.id;
         doc.razorpay_amount_paise = captured.amount;
         const pgPct = doc.pg_commission_percentage || 0;
         if (pgPct > 0) {
@@ -151,7 +152,11 @@ async function processNoShows() {
         const amountPaid = Math.max(0, (doc.order_amount || 0) - (doc.coupon_discount_amount || 0));
         refundAmount = pct != null ? Math.round((amountPaid * pct) / 100) : 0;
         if (refundAmount > 0) {
-          const refResult = await razorpaySdk.createRefund(doc.razorpay_payment_id, Math.round(refundAmount * 100) < doc.razorpay_amount_paise ? { amount: Math.round(refundAmount * 100) } : {});
+          const refResult = await easebuzzSdk.createRefund(
+            doc.razorpay_payment_id,
+            Math.round(refundAmount * 100) < doc.razorpay_amount_paise ? { amount: Math.round(refundAmount * 100) } : {},
+            doc
+          );
           if (refResult.success) {
             doc.refund_amount = refundAmount;
             doc.refund_status = 'initiated';

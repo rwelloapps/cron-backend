@@ -3,7 +3,7 @@ const subscriptionBillingCycle = require('../../admin/models/subscription_billin
 const wallet = require('../../admin/models/wallet');
 const walletTransaction = require('../../admin/models/wallet_transaction');
 const constants = require('../constants');
-const razorpaySdk = require(path.join(__dirname, '..', '..', 'admin', 'services', 'razorpay_sdk'));
+const easebuzzSdk = require(path.join(__dirname, '..', '..', 'admin', 'services', 'easebuzz_sdk'));
 
 async function initiateCyclePayment(cycleDoc, mandate, vendor) {
   if (mandate.mandate_status !== constants.MANDATE_CONFIRMED_STATUS) {
@@ -21,16 +21,19 @@ async function initiateCyclePayment(cycleDoc, mandate, vendor) {
 
   var vendorId = cycleDoc.vendor_id && cycleDoc.vendor_id._id ? cycleDoc.vendor_id._id : cycleDoc.vendor_id;
   var receipt = 'sub_cycle_' + vendorId + '_' + cycleDoc.cycle_index + '_' + Date.now();
-  var result = await razorpaySdk.createRecurringPayment({
+  var result = await easebuzzSdk.createRecurringPayment({
     customer_id: mandate.razorpay_customer_id,
     token_id: mandate.razorpay_token_id,
+    easebuzz_debit_mode: mandate.easebuzz_debit_mode,
     amount: amountPaise,
     currency: 'INR',
     receipt: receipt,
     notes: {
       vendor_id: String(vendorId),
       cycle_index: String(cycleDoc.cycle_index),
-      cycle_id: String(cycleDoc._id)
+      cycle_id: String(cycleDoc._id),
+      email: vendor && vendor.email,
+      phone: vendor && (vendor.phone || vendor.temp_phone)
     }
   });
 
@@ -80,7 +83,7 @@ async function initiateCyclePayment(cycleDoc, mandate, vendor) {
       description: 'Subscription cycle ' + cycleDoc.cycle_index + ' (mandate)',
       reference_id: String(cycleDoc._id),
       reference_type: 'subscription',
-      payment_method: 'razorpay',
+      payment_method: 'easebuzz',
       payment_id: paymentId,
       status: 'completed'
     });
