@@ -6,6 +6,7 @@
 const mandateCheckService = require('../services/mandateCheckService');
 const subscriptionStatusService = require('../../admin/services/subscriptionStatusService');
 const paymentMandate = require('../../admin/models/payment_mandate');
+const mandateRecoveryService = require('../services/mandateRecoveryService');
 
 async function run() {
   console.log("[Cron] Subscription status sync job started");
@@ -18,6 +19,21 @@ async function run() {
 
     var refreshResult = await subscriptionStatusService.refreshAllVendorsSubscriptionStatusWithMandateCheck(paymentMandate);
     console.log("[Cron] Subscription status sync done:", refreshResult.refreshed, "vendors refreshed");
+
+    var recoveryResult = await mandateRecoveryService.recoverAllVendorsPendingCycles('cron-subscription-sync');
+    console.log(
+      "[Cron] Mandate recovery:",
+      recoveryResult.checked,
+      "vendors checked,",
+      recoveryResult.attempted,
+      "cycles attempted,",
+      recoveryResult.paid,
+      "paid,",
+      recoveryResult.failed,
+      "failed,",
+      recoveryResult.activated,
+      "activated"
+    );
   } catch (e) {
     console.error("[Cron] Subscription status sync job error:", e);
   }
