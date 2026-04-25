@@ -24,10 +24,15 @@ async function initiateCyclePayment(cycleDoc, mandate, vendor) {
   var result = await easebuzzSdk.createRecurringPayment({
     customer_id: mandate.razorpay_customer_id,
     token_id: mandate.razorpay_token_id,
+    customer_authentication_id: mandate.razorpay_token_id,
+    auto_debit_access_key: mandate.razorpay_mandate_id,
+    merchant_debit_id: receipt,
     easebuzz_debit_mode: mandate.easebuzz_debit_mode,
     amount: amountPaise,
     currency: 'INR',
     receipt: receipt,
+    firstname: (vendor && (vendor.shop_name || vendor.name)) || 'Vendor',
+    productinfo: 'Subscription payment',
     notes: {
       vendor_id: String(vendorId),
       cycle_index: String(cycleDoc.cycle_index),
