@@ -96,7 +96,10 @@ async function checkPrepaidPayments() {
  */
 async function expireSlotBlocks() {
   await ensureDb();
-  const result = await slotBlock.deleteMany({ expires_at: { $lt: new Date() } });
+  const result = await slotBlock.deleteMany({
+    expires_at: { $lt: new Date() },
+    $or: [{ booking_id: { $exists: false } }, { booking_id: null }],
+  });
   return { deleted: result.deletedCount };
 }
 
