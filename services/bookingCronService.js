@@ -255,7 +255,7 @@ async function autoCompleteInProgress() {
 async function processCompletedBookingsSettlement() {
   await ensureDb();
   const completed = await booking.find({
-    status: ORDER_STATUS.COMPLETED,
+    status: { $in: [ORDER_STATUS.COMPLETED, ORDER_STATUS.NO_SHOW, ORDER_STATUS.CANCELLED] },
     payment_received: true,
     wallet_credited: false
   }).lean();
