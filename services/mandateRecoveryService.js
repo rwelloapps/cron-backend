@@ -82,7 +82,7 @@ async function recoverVendorPendingCycles(vendorId, source = 'unknown') {
     });
 
     const shouldBeActive = subscriptionStatusService.computeVendorSubscriptionActive(vdoc, null, mandate);
-    const nextActive = shouldBeActive && remainingDue === 0;
+    const nextActive = subscriptionStatusService.finalizeVendorSubscriptionActive(shouldBeActive, remainingDue);
     if (vdoc.is_subscription_active !== nextActive) {
       vdoc.is_subscription_active = nextActive;
       await vdoc.save();
