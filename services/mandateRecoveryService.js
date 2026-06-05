@@ -86,7 +86,7 @@ async function recoverVendorPendingCycles(vendorId, source = 'unknown') {
     if (vdoc.is_subscription_active !== nextActive) {
       vdoc.is_subscription_active = nextActive;
       await vdoc.save();
-      await subscriptionStatusService.syncBranchesSubscriptionStatus(vdoc._id, nextActive);
+      await subscriptionStatusService.syncBranchesForVendorSubscription(vdoc, nextActive);
       out.activated = nextActive;
     }
     return out;
