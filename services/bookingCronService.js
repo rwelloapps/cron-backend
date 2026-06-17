@@ -121,7 +121,7 @@ async function processNoShows() {
     session.startTransaction();
     try {
       const doc = await booking.findById(b._id).session(session);
-      if (!doc || ['cancelled', 'no_show', 'completed'].includes(doc.status)) {
+      if (!doc || ['cancelled', 'vendor_rejected', 'no_show', 'completed'].includes(doc.status)) {
         await session.abortTransaction();
         continue;
       }
