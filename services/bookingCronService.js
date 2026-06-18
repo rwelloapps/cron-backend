@@ -152,8 +152,8 @@ async function processNoShows() {
         const policyDoc = branchDoc?.cancellation_policy_id ? await cancellationPolicy.findById(branchDoc.cancellation_policy_id).lean() : null;
         const hoursUntil = 0;
         const pct = policyDoc ? getRefundPercentage(policyDoc, hoursUntil) : 0;
-        const amountPaid = Math.max(0, (doc.order_amount || 0) - (doc.coupon_discount_amount || 0));
-        refundAmount = pct != null ? Math.round((amountPaid * pct) / 100) : 0;
+        const totalPaid = totalCustomerPaysFromBooking(doc);
+        refundAmount = pct != null ? roundMoney((totalPaid * pct) / 100) : 0;
         if (refundAmount > 0) {
           const refResult = await easebuzzSdk.createRefund(
             doc.razorpay_payment_id,
