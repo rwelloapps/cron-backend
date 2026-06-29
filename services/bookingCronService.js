@@ -239,6 +239,7 @@ async function autoCompleteInProgress() {
       const doc = await booking.findById(b._id);
       if (!doc || doc.status !== ORDER_STATUS.IN_PROGRESS || !doc.payment_received) continue;
       doc.status = ORDER_STATUS.COMPLETED;
+      if (!doc.service_completed_at) doc.service_completed_at = new Date();
       await doc.save();
       const settle = await bookingServiceAdmin.completeBookingSettlement(doc);
       if (settle.success) completed++;
