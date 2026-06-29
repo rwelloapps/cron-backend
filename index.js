@@ -61,7 +61,7 @@ function startScheduler() {
     bookingSettlementJob.run();
   }, { timezone: 'Asia/Kolkata' });
 
-  console.log("[Cron] Scheduler started (mandate 02:00, hold 03:00, billing 04:00, employee salary 05:00, subscription sync hourly, prepaid+slot-block every min, no-show every 5min, pending-timeout+autocomplete every min, settlement every 5min IST)");
+  console.log("[Cron] Scheduler started (mandate 02:00, hold 03:00, billing 04:00, employee salary 05:00, subscription sync hourly, prepaid+slot-block every min, no-show every 5min, pending-timeout+expired-pending every min, autocomplete every min, settlement every 5min IST)");
 }
 
 (async function () {

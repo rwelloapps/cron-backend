@@ -103,16 +103,82 @@ async function expireSlotBlocks() {
   return { deleted: result.deletedCount };
 }
 
+/** Slot ended long enough ago to run post-slot actions (no-show / pending cancel). */
+function slotEndCutoff(now = new Date()) {
+  const graceMs = Math.max(0, Number(NO_SHOW_GRACE_MINUTES) || 0) * 60 * 1000;
+  return new Date(now.getTime() - graceMs);
+}
+
+async function releaseSlotBlock(session, slotBlockId) {
+  if (!slotBlockId) return;
+  await slotBlock.deleteOne({ _id: slotBlockId }).session(session);
+}
+
 /**
- * No-show: orders past slot_end + grace that were not completed - cancel and refund per policy (first time only)
+ * Cancel pending bookings whose scheduled slot has ended (vendor never confirmed / payment never completed).
+ */
+async function processExpiredPendingBookings() {
+  await ensureDb();
+  const cutoff = slotEndCutoff();
+  const candidates = await booking.find({
+    status: { $in: [ORDER_STATUS.PENDING_CONFIRMATION, ORDER_STATUS.PENDING_PAYMENT] },
+    slot_end_at: { $lt: cutoff },
+  }).lean();
+
+  let cancelled = 0;
+  for (const b of candidates) {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+      const doc = await booking.findById(b._id).session(session);
+      if (!doc) {
+        await session.abortTransaction();
+        continue;
+      }
+      const priorStatus = doc.status;
+      if (![ORDER_STATUS.PENDING_CONFIRMATION, ORDER_STATUS.PENDING_PAYMENT].includes(priorStatus)) {
+        await session.abortTransaction();
+        continue;
+      }
+      if (!doc.slot_end_at || new Date(doc.slot_end_at) >= cutoff) {
+        await session.abortTransaction();
+        continue;
+      }
+      if (priorStatus === ORDER_STATUS.PENDING_PAYMENT && doc.payment_received === true) {
+        await session.abortTransaction();
+        continue;
+      }
+
+      doc.status = ORDER_STATUS.CANCELLED;
+      doc.cancelled_at = new Date();
+      doc.cancellation_reason =
+        priorStatus === ORDER_STATUS.PENDING_CONFIRMATION
+          ? 'Not confirmed before appointment ended'
+          : 'Payment not completed before appointment ended';
+      await doc.save({ session });
+      await releaseSlotBlock(session, doc.slot_block_id);
+      await session.commitTransaction();
+      cancelled++;
+    } catch (e) {
+      await session.abortTransaction().catch(() => {});
+      console.error('[BookingCron] Expired pending cancel error for booking', b._id, e.message);
+    } finally {
+      session.endSession();
+    }
+  }
+  return { cancelled };
+}
+
+/**
+ * No-show: confirmed bookings past slot end that never started (OTP not entered).
  */
 async function processNoShows() {
   await ensureDb();
-  const graceMs = NO_SHOW_GRACE_MINUTES * 60 * 1000;
-  const cutoff = new Date(Date.now() - graceMs);
+  const cutoff = slotEndCutoff();
   const candidates = await booking.find({
-    status: { $in: [ORDER_STATUS.PENDING_PAYMENT, ORDER_STATUS.CONFIRMED] },
-    slot_end_at: { $lt: cutoff }
+    status: ORDER_STATUS.CONFIRMED,
+    slot_end_at: { $lt: cutoff },
+    $or: [{ service_started_at: null }, { service_started_at: { $exists: false } }],
   }).lean();
 
   let processed = 0;
@@ -121,7 +187,15 @@ async function processNoShows() {
     session.startTransaction();
     try {
       const doc = await booking.findById(b._id).session(session);
-      if (!doc || ['cancelled', 'vendor_rejected', 'no_show', 'completed'].includes(doc.status)) {
+      if (!doc || doc.status !== ORDER_STATUS.CONFIRMED) {
+        await session.abortTransaction();
+        continue;
+      }
+      if (doc.service_started_at) {
+        await session.abortTransaction();
+        continue;
+      }
+      if (!doc.slot_end_at || new Date(doc.slot_end_at) >= cutoff) {
         await session.abortTransaction();
         continue;
       }
@@ -139,9 +213,7 @@ async function processNoShows() {
       });
       await record.save({ session });
 
-      if (doc.slot_block_id) {
-        await slotBlock.deleteOne({ _id: doc.slot_block_id }).session(session);
-      }
+      await releaseSlotBlock(session, doc.slot_block_id);
 
       const existingNoShows = await userCancellationRecord.countDocuments({ user_id: doc.user_id, is_no_show: true, _id: { $ne: record._id } }).session(session);
       const isFirstNoShow = existingNoShows === 0;
@@ -198,7 +270,7 @@ async function cancelPendingPaymentTimeouts() {
     session.startTransaction();
     try {
       const doc = await booking.findById(b._id).session(session);
-      if (!doc || doc.status !== ORDER_STATUS.PENDING_PAYMENT) {
+      if (!doc || doc.status !== ORDER_STATUS.PENDING_PAYMENT || doc.payment_received === true) {
         await session.abortTransaction();
         continue;
       }
@@ -206,9 +278,7 @@ async function cancelPendingPaymentTimeouts() {
       doc.cancelled_at = new Date();
       doc.cancellation_reason = 'Payment not confirmed within time';
       await doc.save({ session });
-      if (doc.slot_block_id) {
-        await slotBlock.deleteOne({ _id: doc.slot_block_id }).session(session);
-      }
+      await releaseSlotBlock(session, doc.slot_block_id);
       await session.commitTransaction();
       cancelled++;
     } catch (e) {
@@ -222,22 +292,22 @@ async function cancelPendingPaymentTimeouts() {
 }
 
 /**
- * Auto-complete in_progress bookings where slot end passed 30+ min and payment received; then run settlement
+ * Auto-complete in_progress bookings 1 hour after scheduled slot end if not manually completed.
  */
 async function autoCompleteInProgress() {
   await ensureDb();
   const cutoff = new Date(Date.now() - IN_PROGRESS_AUTO_COMPLETE_MINUTES * 60 * 1000);
   const candidates = await booking.find({
     status: ORDER_STATUS.IN_PROGRESS,
-    payment_received: true,
-    slot_end_at: { $lt: cutoff }
+    slot_end_at: { $lt: cutoff },
   }).lean();
 
   let completed = 0;
   for (const b of candidates) {
     try {
       const doc = await booking.findById(b._id);
-      if (!doc || doc.status !== ORDER_STATUS.IN_PROGRESS || !doc.payment_received) continue;
+      if (!doc || doc.status !== ORDER_STATUS.IN_PROGRESS) continue;
+      if (!doc.slot_end_at || new Date(doc.slot_end_at) >= cutoff) continue;
       doc.status = ORDER_STATUS.COMPLETED;
       if (!doc.service_completed_at) doc.service_completed_at = new Date();
       await doc.save();
@@ -276,6 +346,7 @@ async function processCompletedBookingsSettlement() {
 module.exports = {
   checkPrepaidPayments,
   expireSlotBlocks,
+  processExpiredPendingBookings,
   processNoShows,
   cancelPendingPaymentTimeouts,
   autoCompleteInProgress,
