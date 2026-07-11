@@ -12,6 +12,7 @@ const cancellationPolicy = require(path.join(__dirname, '..', '..', 'admin', 'mo
 const easebuzzSdk = require(path.join(__dirname, '..', '..', 'admin', 'services', 'easebuzz_sdk'));
 const { getRefundPercentage } = require(path.join(__dirname, '..', '..', 'admin', 'routes', 'v1', 'middlewares', 'cancellation_policy'));
 const bookingServiceAdmin = require(path.join(__dirname, '..', '..', 'admin', 'services', 'bookingService'));
+const { notifyBookingCancelled, notifyBookingNoShow } = require(path.join(__dirname, '..', '..', 'admin', 'services', 'notificationService'));
 const { roundMoney, totalCustomerPaysFromBooking } = bookingServiceAdmin;
 const {
   NO_SHOW_GRACE_MINUTES,
@@ -158,6 +159,10 @@ async function processExpiredPendingBookings() {
       await doc.save({ session });
       await releaseSlotBlock(session, doc.slot_block_id);
       await session.commitTransaction();
+      notifyBookingCancelled({
+        booking: doc.toObject ? doc.toObject() : doc,
+        initiatedBy: 'system',
+      }).catch((err) => console.error('[BookingCron] expired pending cancel notification', err));
       cancelled++;
     } catch (e) {
       await session.abortTransaction().catch(() => {});
@@ -242,6 +247,10 @@ async function processNoShows() {
       }
       await session.commitTransaction();
       await bookingServiceAdmin.applyCancellationRestrictions(doc.user_id.toString(), true);
+      notifyBookingNoShow({
+        booking: doc.toObject ? doc.toObject() : doc,
+        initiatedBy: 'system',
+      }).catch((err) => console.error('[BookingCron] no-show notification', err));
       processed++;
     } catch (e) {
       await session.abortTransaction().catch(() => {});
@@ -280,6 +289,10 @@ async function cancelPendingPaymentTimeouts() {
       await doc.save({ session });
       await releaseSlotBlock(session, doc.slot_block_id);
       await session.commitTransaction();
+      notifyBookingCancelled({
+        booking: doc.toObject ? doc.toObject() : doc,
+        initiatedBy: 'system',
+      }).catch((err) => console.error('[BookingCron] pending payment timeout notification', err));
       cancelled++;
     } catch (e) {
       await session.abortTransaction().catch(() => {});

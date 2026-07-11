@@ -15,6 +15,7 @@ const bookingSlotBlockJob = require('./jobs/bookingSlotBlockJob');
 const bookingPendingTimeoutJob = require('./jobs/bookingPendingTimeoutJob');
 const bookingAutoCompleteJob = require('./jobs/bookingAutoCompleteJob');
 const bookingSettlementJob = require('./jobs/bookingSettlementJob');
+const bookingNotificationReminderJob = require('./jobs/bookingNotificationReminderJob');
 
 function startScheduler() {
   cron.schedule('0 2 * * *', function () {
@@ -61,7 +62,11 @@ function startScheduler() {
     bookingSettlementJob.run();
   }, { timezone: 'Asia/Kolkata' });
 
-  console.log("[Cron] Scheduler started (mandate 02:00, hold 03:00, billing 04:00, employee salary 05:00, subscription sync hourly, prepaid+slot-block every min, no-show every 5min, pending-timeout+expired-pending every min, autocomplete every min, settlement every 5min IST)");
+  cron.schedule('*/5 * * * *', function () {
+    bookingNotificationReminderJob.run();
+  }, { timezone: 'Asia/Kolkata' });
+
+  console.log("[Cron] Scheduler started (mandate 02:00, hold 03:00, billing 04:00, employee salary 05:00, subscription sync hourly, prepaid+slot-block every min, no-show every 5min, pending-timeout+expired-pending every min, autocomplete every min, settlement+booking-reminders every 5min IST)");
 }
 
 (async function () {
