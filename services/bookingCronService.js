@@ -156,6 +156,10 @@ async function processExpiredPendingBookings() {
         priorStatus === ORDER_STATUS.PENDING_CONFIRMATION
           ? 'Not confirmed before appointment ended'
           : 'Payment not completed before appointment ended';
+      const cashRestore = await bookingServiceAdmin.restoreRwelloCashForCancelledBooking(doc, 1, session);
+      if (!cashRestore.ok) {
+        throw new Error(cashRestore.message || 'Failed to restore Rwello Cash');
+      }
       await doc.save({ session });
       await releaseSlotBlock(session, doc.slot_block_id);
       await session.commitTransaction();
@@ -286,6 +290,10 @@ async function cancelPendingPaymentTimeouts() {
       doc.status = ORDER_STATUS.CANCELLED;
       doc.cancelled_at = new Date();
       doc.cancellation_reason = 'Payment not confirmed within time';
+      const cashRestore = await bookingServiceAdmin.restoreRwelloCashForCancelledBooking(doc, 1, session);
+      if (!cashRestore.ok) {
+        throw new Error(cashRestore.message || 'Failed to restore Rwello Cash');
+      }
       await doc.save({ session });
       await releaseSlotBlock(session, doc.slot_block_id);
       await session.commitTransaction();
