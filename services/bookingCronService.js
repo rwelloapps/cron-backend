@@ -104,9 +104,9 @@ async function expireSlotBlocks() {
   return { deleted: result.deletedCount };
 }
 
-/** Slot ended long enough ago to run post-slot actions (no-show / pending cancel). */
-function slotEndCutoff(now = new Date()) {
-  const graceMs = Math.max(0, Number(NO_SHOW_GRACE_MINUTES) || 0) * 60 * 1000;
+/** Cutoff for actions that wait a grace period after slot end (e.g. no-show). */
+function slotEndCutoff(now = new Date(), graceMinutes = NO_SHOW_GRACE_MINUTES) {
+  const graceMs = Math.max(0, Number(graceMinutes) || 0) * 60 * 1000;
   return new Date(now.getTime() - graceMs);
 }
 
@@ -120,7 +120,8 @@ async function releaseSlotBlock(session, slotBlockId) {
  */
 async function processExpiredPendingBookings() {
   await ensureDb();
-  const cutoff = slotEndCutoff();
+  // Pending bookings cancel as soon as the appointment window ends (no no-show grace).
+  const cutoff = slotEndCutoff(new Date(), 0);
   const candidates = await booking.find({
     status: { $in: [ORDER_STATUS.PENDING_CONFIRMATION, ORDER_STATUS.PENDING_PAYMENT] },
     slot_end_at: { $lt: cutoff },
@@ -179,11 +180,12 @@ async function processExpiredPendingBookings() {
 }
 
 /**
- * No-show: confirmed bookings past slot end that never started (OTP not entered).
+ * No-show: confirmed bookings that never started (OTP not entered),
+ * marked 1 hour after slot_end_at (NO_SHOW_GRACE_MINUTES).
  */
 async function processNoShows() {
   await ensureDb();
-  const cutoff = slotEndCutoff();
+  const cutoff = slotEndCutoff(new Date(), NO_SHOW_GRACE_MINUTES);
   const candidates = await booking.find({
     status: ORDER_STATUS.CONFIRMED,
     slot_end_at: { $lt: cutoff },
@@ -212,6 +214,12 @@ async function processNoShows() {
       doc.status = ORDER_STATUS.NO_SHOW;
       doc.is_no_show = true;
       doc.cancelled_at = new Date();
+
+      const restorations = await bookingServiceAdmin.applyNoShowCustomerRestorations(doc, session);
+      if (!restorations.ok) {
+        throw new Error(restorations.message || 'Failed to restore Rwello Cash / coupon on no-show');
+      }
+
       await doc.save({ session });
 
       const record = new userCancellationRecord({
