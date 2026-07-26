@@ -17,6 +17,7 @@ const bookingAutoCompleteJob = require('./jobs/bookingAutoCompleteJob');
 const bookingSettlementJob = require('./jobs/bookingSettlementJob');
 const bookingNotificationReminderJob = require('./jobs/bookingNotificationReminderJob');
 const userArchiveInactiveJob = require('./jobs/userArchiveInactiveJob');
+const branchSettlementReconciliationJob = require('./jobs/branchSettlementReconciliationJob');
 
 function startScheduler() {
   cron.schedule('0 2 * * *', function () {
@@ -71,7 +72,11 @@ function startScheduler() {
     bookingNotificationReminderJob.run();
   }, { timezone: 'Asia/Kolkata' });
 
-  console.log("[Cron] Scheduler started (mandate 02:00, hold 03:00, billing 04:00, employee salary 05:00, inactive users 06:00, subscription sync hourly, prepaid+slot-block every min, no-show every 5min, pending-timeout+expired-pending every min, autocomplete every min, settlement+booking-reminders every 5min IST)");
+  cron.schedule('* * * * *', function () {
+    branchSettlementReconciliationJob.run();
+  }, { timezone: 'Asia/Kolkata' });
+
+  console.log("[Cron] Scheduler started (mandate 02:00, hold 03:00, billing 04:00, employee salary 05:00, inactive users 06:00, subscription sync hourly, prepaid+slot-block+branch-settlement reconciliation every min, no-show every 5min, pending-timeout+expired-pending every min, autocomplete every min, booking settlement+reminders every 5min IST)");
 }
 
 (async function () {
