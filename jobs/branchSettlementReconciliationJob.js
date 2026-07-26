@@ -17,7 +17,7 @@ async function run() {
   try {
     await mongoose.ensureConnected();
     const result = await settlementService.reconcilePendingSettlements(100);
-    if (result.checked || result.errors) {
+    if (result.checked || result.errors || result.cleaned) {
       console.log(
         '[Cron] Branch settlements:',
         result.checked,
@@ -26,6 +26,8 @@ async function run() {
         'completed,',
         result.failed,
         'failed,',
+        result.cleaned,
+        'cleaned,',
         result.errors,
         'errors',
       );
