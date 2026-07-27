@@ -18,6 +18,7 @@ const bookingSettlementJob = require('./jobs/bookingSettlementJob');
 const bookingNotificationReminderJob = require('./jobs/bookingNotificationReminderJob');
 const userArchiveInactiveJob = require('./jobs/userArchiveInactiveJob');
 const branchSettlementReconciliationJob = require('./jobs/branchSettlementReconciliationJob');
+const { startHealthServer } = require('./healthServer');
 
 function startScheduler() {
   cron.schedule('0 2 * * *', function () {
@@ -83,6 +84,7 @@ function startScheduler() {
   try {
     await mongoose.connectionReady;
     console.log("[Cron] MongoDB ready, starting scheduler");
+    startHealthServer();
     startScheduler();
   } catch (e) {
     console.error("[Cron] Failed to wait for MongoDB:", e);

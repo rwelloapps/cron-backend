@@ -74,15 +74,16 @@ async function initiateCyclePayment(cycleDoc, mandate, vendor) {
 
   var walletDoc = await wallet.findOne({ vendor_id: vendorId }).lean();
   if (walletDoc) {
-    var balanceBefore = Number(walletDoc.balance) || 0;
-    var amount = Number(cycleDoc.amount_inr) || 0;
-    var balanceAfter = balanceBefore - amount;
+    var balanceBefore = Math.round((Number(walletDoc.balance) || 0) * 100) / 100;
+    var amount = Math.round((Number(cycleDoc.amount_inr) || 0) * 100) / 100;
+    var balanceAfter = Math.round((balanceBefore - amount) * 100) / 100;
+    if (balanceAfter < 0) balanceAfter = 0;
     await walletTransaction.create({
       wallet_id: walletDoc._id,
       transaction_type: 'debit',
       amount: amount,
       balance_before: balanceBefore,
-      balance_after: Math.max(0, balanceAfter),
+      balance_after: balanceAfter,
       currency: 'INR',
       transaction_category: 'subscription_payment',
       description: 'Subscription cycle ' + cycleDoc.cycle_index + ' (mandate)',
@@ -94,7 +95,7 @@ async function initiateCyclePayment(cycleDoc, mandate, vendor) {
     });
     await wallet.updateOne(
       { _id: walletDoc._id },
-      { $set: { balance: Math.max(0, balanceAfter), updated_at: new Date() } }
+      { $set: { balance: balanceAfter, updated_at: new Date() } }
     );
   }
 
