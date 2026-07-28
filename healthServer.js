@@ -4,6 +4,7 @@ const http = require('http');
 const os = require('os');
 const mongoose = require('./services/mongo_db');
 const { version } = require('./package.json');
+const { getGitRevision } = require('./utils/gitRevision');
 
 const PORT = Number(process.env.CRON_HEALTH_PORT || process.env.PORT_CRON_HEALTH || 2030);
 
@@ -37,6 +38,7 @@ function startHealthServer() {
       }
 
       const ok = databaseCode === 200;
+      const git = getGitRevision();
       const body = {
         response_code: ok ? 200 : 500,
         message: ok ? 'OK' : 'Unhealthy',
@@ -48,6 +50,9 @@ function startHealthServer() {
           cache_database_code: 200,
           version,
           hostname: os.hostname(),
+          git_branch: git.git_branch,
+          git_commit: git.git_commit,
+          git_commit_short: git.git_commit_short,
           response_time_ms: Date.now() - started,
         },
       };
