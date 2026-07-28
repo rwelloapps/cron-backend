@@ -53,6 +53,9 @@ function startHealthServer() {
           git_branch: git.git_branch,
           git_commit: git.git_commit,
           git_commit_short: git.git_commit_short,
+          git_committed_at: git.git_committed_at,
+          updated_ago: git.updated_ago,
+          updated_ago_seconds: git.updated_ago_seconds,
           response_time_ms: Date.now() - started,
         },
       };
