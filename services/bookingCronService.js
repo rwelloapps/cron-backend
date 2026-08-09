@@ -159,7 +159,7 @@ async function processExpiredPendingBookings() {
           : 'Payment not completed before appointment ended';
       const cashRestore = await bookingServiceAdmin.restoreRwelloCashForCancelledBooking(doc, 1, session);
       if (!cashRestore.ok) {
-        throw new Error(cashRestore.message || 'Failed to restore Rwello Cash');
+        throw new Error(cashRestore.message || 'Failed to restore Rwello Coin');
       }
       await doc.save({ session });
       await releaseSlotBlock(session, doc.slot_block_id);
@@ -217,7 +217,7 @@ async function processNoShows() {
 
       const restorations = await bookingServiceAdmin.applyNoShowCustomerRestorations(doc, session);
       if (!restorations.ok) {
-        throw new Error(restorations.message || 'Failed to restore Rwello Cash / coupon on no-show');
+        throw new Error(restorations.message || 'Failed to restore Rwello Coin / coupon on no-show');
       }
 
       await doc.save({ session });
@@ -300,7 +300,7 @@ async function cancelPendingPaymentTimeouts() {
       doc.cancellation_reason = 'Payment not confirmed within time';
       const cashRestore = await bookingServiceAdmin.restoreRwelloCashForCancelledBooking(doc, 1, session);
       if (!cashRestore.ok) {
-        throw new Error(cashRestore.message || 'Failed to restore Rwello Cash');
+        throw new Error(cashRestore.message || 'Failed to restore Rwello Coin');
       }
       await doc.save({ session });
       await releaseSlotBlock(session, doc.slot_block_id);
