@@ -3,3 +3,7 @@ node_modules/
 
 # dotenv environment variable files
 .env
+
+# Firebase Admin SDK (backend root)
+../rwello-app-firebase-adminsdk.json
+../rwello-firebase-adminsdk.json
