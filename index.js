@@ -17,6 +17,7 @@ const bookingAutoCompleteJob = require('./jobs/bookingAutoCompleteJob');
 const bookingSettlementJob = require('./jobs/bookingSettlementJob');
 const bookingNotificationReminderJob = require('./jobs/bookingNotificationReminderJob');
 const userArchiveInactiveJob = require('./jobs/userArchiveInactiveJob');
+const packageExpiryJob = require('./jobs/packageExpiryJob');
 const branchSettlementReconciliationJob = require('./jobs/branchSettlementReconciliationJob');
 const branchManualPaymentReconciliationJob = require('./jobs/branchManualPaymentReconciliationJob');
 const { startHealthServer } = require('./healthServer');
@@ -40,6 +41,10 @@ function startScheduler() {
 
   cron.schedule('0 6 * * *', function () {
     userArchiveInactiveJob.run();
+  }, { timezone: 'Asia/Kolkata' });
+
+  cron.schedule('30 6 * * *', function () {
+    packageExpiryJob.run();
   }, { timezone: 'Asia/Kolkata' });
 
   cron.schedule('0 * * * *', function () {

@@ -74,6 +74,12 @@ async function checkPrepaidPayments() {
         if (captured.method) doc.razorpay_payment_method = captured.method;
         doc.status = ORDER_STATUS.CONFIRMED;
         await doc.save({ session });
+        try {
+          const packageService = require(path.join(__dirname, '..', '..', 'admin', 'services', 'packageService'));
+          await packageService.onBookingPaid(doc);
+        } catch (err) {
+          console.error('package payment hook', err);
+        }
         if (doc.slot_block_id) {
           await slotBlock.deleteOne({ _id: doc.slot_block_id }).session(session);
         }
